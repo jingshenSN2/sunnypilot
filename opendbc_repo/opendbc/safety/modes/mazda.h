@@ -22,6 +22,7 @@ static void mazda_rx_hook(const CANPacket_t *msg) {
       // sample speed: scale by 0.01 to get kph
       int speed = (msg->data[2] << 8) | msg->data[3];
       vehicle_moving = speed > 10; // moving when speed > 0.1 kph
+      UPDATE_VEHICLE_SPEED((float)speed * 0.01 * KPH_TO_MS);
     }
 
     if (msg->addr == MAZDA_STEER_TORQUE) {
@@ -49,7 +50,12 @@ static void mazda_rx_hook(const CANPacket_t *msg) {
 
 static bool mazda_tx_hook(const CANPacket_t *msg) {
   const TorqueSteeringLimits MAZDA_STEERING_LIMITS = {
-    .max_torque = 800,
+    .max_torque = 1200,
+    .dynamic_max_torque = true,
+    .max_torque_lookup = {
+      {8.0, 12.1, 14.5},
+      {1200, 1000, 800},
+    },
     .max_rate_up = 10,
     .max_rate_down = 25,
     .max_rt_delta = 300,

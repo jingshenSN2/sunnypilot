@@ -1,3 +1,5 @@
+import numpy as np
+
 from opendbc.can import CANPacker
 from opendbc.car import Bus, structs
 from opendbc.car.lateral import apply_driver_steer_torque_limits
@@ -22,12 +24,14 @@ class CarController(CarControllerBase, IntelligentCruiseButtonManagementInterfac
     can_sends = []
 
     apply_torque = 0
+    # Like Rivian, use the current speed's scale for requests, driver limits
+    # and normalized feedback, including while lateral control is inactive.
+    steer_max = int(round(float(np.interp(CS.out.vEgoRaw, *CarControllerParams.SAFETY_TORQUE_LOOKUP))))
 
     if CC.latActive:
-      # calculate steer and also set limits due to driver torque
-      new_torque = int(round(CC.actuators.torque * CarControllerParams.STEER_MAX))
+      new_torque = int(round(CC.actuators.torque * steer_max))
       apply_torque = apply_driver_steer_torque_limits(new_torque, self.apply_torque_last,
-                                                      CS.out.steeringTorque, CarControllerParams)
+                                                      CS.out.steeringTorque, CarControllerParams, steer_max)
 
     if CC.cruiseControl.cancel:
       # If brake is pressed, let us wait >70ms before trying to disable crz to avoid
@@ -64,7 +68,7 @@ class CarController(CarControllerBase, IntelligentCruiseButtonManagementInterfac
     can_sends.extend(IntelligentCruiseButtonManagementInterface.update(self, CC_SP, CS, self.packer, self.frame, self.last_button_frame))
 
     new_actuators = CC.actuators.as_builder()
-    new_actuators.torque = apply_torque / CarControllerParams.STEER_MAX
+    new_actuators.torque = apply_torque / steer_max
     new_actuators.torqueOutputCan = apply_torque
 
     self.frame += 1

@@ -5,6 +5,7 @@ from opendbc.car.interfaces import CarStateBase
 from opendbc.car.mazda.values import DBC, LKAS_LIMITS
 
 ButtonType = structs.CarState.ButtonEvent.Type
+LKAS_LOW_SPEED_LOCKOUT_MAX_FRAMES = 5 * 100
 
 
 class CarState(CarStateBase):
@@ -17,6 +18,8 @@ class CarState(CarStateBase):
     self.crz_btns_counter = 0
     self.acc_active_last = False
     self.lkas_allowed_speed = False
+    self.lkas_low_speed_lockout = False
+    self.lkas_low_speed_lockout_frames = 0
 
     self.distance_button = 0
     self.accel_button = 0
@@ -77,6 +80,18 @@ class CarState(CarStateBase):
         self.lkas_allowed_speed = False
     else:
       self.lkas_allowed_speed = True
+      # EPS can assert LKAS_BLOCK at standstill and keep it asserted briefly after moving.
+      # Track this expected low-speed lockout until the block clears or times out.
+      if ret.standstill and lkas_blocked:
+        self.lkas_low_speed_lockout = True
+        self.lkas_low_speed_lockout_frames = 0
+      elif self.lkas_low_speed_lockout:
+        # Stop suppressing after 5 seconds so a persistent EPS block is still reported.
+        if not lkas_blocked or self.lkas_low_speed_lockout_frames >= LKAS_LOW_SPEED_LOCKOUT_MAX_FRAMES:
+          self.lkas_low_speed_lockout = False
+          self.lkas_low_speed_lockout_frames = 0
+        else:
+          self.lkas_low_speed_lockout_frames += 1
 
     # TODO: the signal used for available seems to be the adaptive cruise signal, instead of the main on
     #       it should be used for carState.cruiseState.nonAdaptive instead
@@ -96,10 +111,12 @@ class CarState(CarStateBase):
         self.low_speed_alert = False
     ret.lowSpeedAlert = self.low_speed_alert
 
-    # Check if LKAS is disabled due to lack of driver torque when all other states indicate
-    # it should be enabled (steer lockout). Don't warn until we actually get lkas active
-    # and lose it again, i.e, after initial lkas activation
-    ret.steerFaultTemporary = self.lkas_allowed_speed and lkas_blocked
+    # Check if LKAS is disabled when all other states indicate it should be enabled,
+    # excluding an expected low-speed lockout observed at standstill.
+    if self.CP.minSteerSpeed > 0:
+      ret.steerFaultTemporary = self.lkas_allowed_speed and lkas_blocked
+    else:
+      ret.steerFaultTemporary = self.lkas_allowed_speed and lkas_blocked and not self.lkas_low_speed_lockout
 
     self.acc_active_last = ret.cruiseState.enabled
 

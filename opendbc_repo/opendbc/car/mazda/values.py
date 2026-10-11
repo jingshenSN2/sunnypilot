@@ -14,8 +14,8 @@ Ecu = CarParams.Ecu
 
 class CarControllerParams:
   # Nominal highway scale; requests and feedback use the speed lookup below.
-  STEER_MAX = 800                # theoretical max_steer 2047
-  SAFETY_TORQUE_LOOKUP = ([8.0, 12.1, 14.5], [1200, 1000, 800])
+  STEER_MAX = 620                # theoretical max_steer 2047
+  SAFETY_TORQUE_LOOKUP = ([8.0, 11.3, 14.5], [1150, 1010, 620])
   STEER_DELTA_UP = 10             # torque increase per refresh
   STEER_DELTA_DOWN = 25           # torque decrease per refresh
   STEER_DRIVER_ALLOWANCE = 15     # allowed driver torque before start limiting
